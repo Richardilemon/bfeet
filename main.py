@@ -61,6 +61,8 @@ class Visit(Base):
     longitude = Column(String(50), nullable=True)
     follow_up_status = Column(String(50), default="New")
     team_name = Column(String(100), nullable=True)
+    outing_day = Column(String(20), nullable=True)   # Monday–Sunday
+    outing_date = Column(Date, nullable=True)         # actual date of the outing session
     sheet_synced = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
@@ -92,8 +94,10 @@ class VisitCreate(BaseModel):
     longitude: Optional[str] = None
     follow_up_status: Optional[str] = "New"
     team_name: Optional[str] = None
+    outing_day: Optional[str] = None   # e.g. "Monday"
+    outing_date: Optional[str] = None  # DD/MM/YYYY
 
-    @field_validator("date_of_evangelism", "date_of_accepting_christ", mode="before")
+    @field_validator("date_of_evangelism", "date_of_accepting_christ", "outing_date", mode="before")
     @classmethod
     def parse_date_field(cls, v):
         return v  # keep as string; we parse below
@@ -123,6 +127,8 @@ class VisitResponse(BaseModel):
     longitude: Optional[str]
     follow_up_status: Optional[str]
     team_name: Optional[str]
+    outing_day: Optional[str]
+    outing_date: Optional[date]
     sheet_synced: bool
     created_at: Optional[datetime]
 
@@ -233,6 +239,8 @@ async def create_visit(
         longitude=lng,
         follow_up_status=body.follow_up_status or "New",
         team_name=body.team_name,
+        outing_day=body.outing_day,
+        outing_date=_parse_date(body.outing_date),
         sheet_synced=False,
     )
     db.add(visit)
@@ -275,7 +283,7 @@ async def list_visits(
     filters = []
 
     if team:
-        filters.append(Visit.team_name == team)
+        filters.append(Visit.outing_day == team)
     if evangeliser:
         filters.append(Visit.evangelisers.ilike(f"%{evangeliser}%"))
     if status:
@@ -312,7 +320,7 @@ async def get_heatmap(
         Visit.longitude.isnot(None),
     )
     if team:
-        stmt = stmt.where(Visit.team_name == team)
+        stmt = stmt.where(Visit.outing_day == team)
 
     result = await db.execute(stmt)
     visits = result.scalars().all()
