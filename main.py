@@ -261,6 +261,8 @@ async def create_visit(
         "latitude": lat,
         "longitude": lng,
         "follow_up_status": body.follow_up_status or "New",
+        "outing_day": body.outing_day,
+        "outing_date": _parse_date(body.outing_date),
     }
     background_tasks.add_task(_sync_to_sheet, record_id, sheet_data)
 

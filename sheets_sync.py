@@ -6,7 +6,8 @@ Column mapping (1-indexed):
   E=date_of_evangelism (DD/MM/YYYY), F=date_of_accepting_christ,
   G=(empty), H=notes, I=phone_numbers,
   J=location_area, K=latitude, L=longitude,
-  M=follow_up_status, N=record_id
+  M=follow_up_status, N=record_id,
+  O=outing_day, P=outing_date (DD/MM/YYYY)
 """
 
 import json
@@ -26,11 +27,13 @@ SCOPES = [
 ]
 
 EXPECTED_HEADERS = {
-    10: "location_area",   # J
-    11: "latitude",        # K
-    12: "longitude",       # L
-    13: "follow_up_status",# M
-    14: "record_id",       # N
+    10: "location_area",    # J
+    11: "latitude",         # K
+    12: "longitude",        # L
+    13: "follow_up_status", # M
+    14: "record_id",        # N
+    15: "outing_day",       # O
+    16: "outing_date",      # P
 }
 
 _client: gspread.Client | None = None
@@ -122,6 +125,8 @@ def append_visit(data: dict) -> None:
         str(data.get("longitude", "")) if data.get("longitude") is not None else "",
         data.get("follow_up_status", "New"),
         str(data.get("record_id", "")),
+        data.get("outing_day", "") or "",
+        _format_date(data.get("outing_date")),
     ]
     sheet.append_row(row, value_input_option="USER_ENTERED")
 
@@ -153,6 +158,8 @@ def update_row(record_id: str, updates: dict) -> None:
         "latitude": 11,
         "longitude": 12,
         "follow_up_status": 13,
+        "outing_day": 15,
+        "outing_date": 16,
     }
 
     batch = []
