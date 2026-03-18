@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import (
     Boolean,
@@ -540,4 +541,8 @@ async def import_from_sheet():
 
 frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
 if os.path.isdir(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="frontend")
+
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(os.path.join(frontend_dir, "index.html"))
