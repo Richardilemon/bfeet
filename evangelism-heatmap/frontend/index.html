@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Beautiful Feet — Evangelism Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --info: #0891b2;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --tab-height: 60px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: var(--tab-height);
+    }
+
+    /* ── Tab panels ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--primary);
+      color: white;
+      padding: 14px 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .topbar span { font-weight: 300; opacity: 0.8; margin-left: 4px; font-size: 0.85rem; }
+
+    /* ── Bottom tab bar ── */
+    .tab-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: var(--tab-height);
+      background: white;
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 100;
+    }
+    .tab-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      border: none;
+      background: none;
+      font-size: 0.65rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    .tab-btn.active { color: var(--primary); }
+    .tab-btn svg { width: 22px; height: 22px; }
+
+    /* ── Shared ── */
+    .page-content { padding: 16px; max-width: 600px; margin: 0 auto; }
+
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--muted); margin-bottom: 4px; margin-top: 12px; }
+    label:first-child { margin-top: 0; }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-family: inherit;
+      color: var(--text);
+      background: white;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    textarea { resize: vertical; min-height: 72px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 11px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:active { opacity: 0.8; }
+    .btn-primary { background: var(--primary); color: white; width: 100%; margin-top: 16px; }
+    .btn-secondary { background: var(--bg); color: var(--text); border: 1.5px solid var(--border); }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+
+    /* ── GPS pill ── */
+    .gps-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      margin-bottom: 14px;
+    }
+    .gps-pill.acquiring { background: #fef3c7; color: #92400e; }
+    .gps-pill.ready { background: #dcfce7; color: #15803d; }
+    .gps-pill.unavailable { background: #fee2e2; color: #991b1b; }
+    .gps-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .gps-pill.acquiring .gps-dot { background: #f59e0b; animation: pulse 1s infinite; }
+    .gps-pill.ready .gps-dot { background: #22c55e; }
+    .gps-pill.unavailable .gps-dot { background: #ef4444; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* ── Status badges ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-saved { background: #dcfce7; color: #15803d; }
+    .badge-unsaved { background: #fee2e2; color: #991b1b; }
+    .badge-discipled { background: #dbeafe; color: #1d4ed8; }
+    .badge-false { background: #fed7aa; color: #92400e; }
+    .badge-default { background: #f1f5f9; color: #475569; }
+
+    /* ── Filter chips ── */
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .chip {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      font-size: 0.78rem;
+      cursor: pointer;
+      background: white;
+      transition: all 0.15s;
+    }
+    .chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+    /* ── People cards ── */
+    .person-card {
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: box-shadow 0.15s;
+    }
+    .person-card:active { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    .person-card-name { font-weight: 600; font-size: 0.98rem; margin-bottom: 4px; }
+    .person-card-meta { font-size: 0.78rem; color: var(--muted); }
+    .person-card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+
+    /* ── Stats ── */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .stat-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .stat-number { font-size: 2rem; font-weight: 700; color: var(--primary); line-height: 1; }
+    .stat-label { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+
+    .bar-container { margin-bottom: 10px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 3px; }
+    .bar-track { background: var(--border); border-radius: 4px; height: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+
+    /* ── Map ── */
+    #map { height: calc(100vh - var(--tab-height) - 60px); width: 100%; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: calc(var(--tab-height) + 12px);
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e293b;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 200;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.success { background: var(--success); }
+    #toast.error { background: var(--danger); }
+    #toast.info { background: var(--info); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 300;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-sheet {
+      background: white;
+      border-radius: 20px 20px 0 0;
+      padding: 20px 16px 32px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-title { font-weight: 700; font-size: 1.05rem; }
+    .modal-close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--muted); }
+
+    /* ── Search ── */
+    .search-box { position: relative; margin-bottom: 12px; }
+    .search-box input { padding-left: 36px; }
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+    }
+
+    .section-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 10px; color: var(--text); }
+
+    .past-visit-toggle { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 0.85rem; cursor: pointer; }
+    .past-visit-toggle input[type="checkbox"] { width: auto; }
+    #past-date-row { display: none; }
+
+    a.phone-link { color: var(--primary); text-decoration: none; font-weight: 500; }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 0.9rem; }
+
+    .map-controls {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 400;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 90vw;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- ═══ TAB: LOG ═══ -->
+<div id="tab-log" class="tab-panel active">
+  <div class="topbar">Beautiful Feet <span>Evangelism Log</span></div>
+  <div class="page-content">
+    <div id="gps-pill" class="gps-pill acquiring">
+      <div class="gps-dot"></div>
+      <span id="gps-label">Acquiring GPS…</span>
+    </div>
+
+    <div class="card">
+      <label>Person's Name *</label>
+      <input id="f-name" type="text" placeholder="Full name" autocomplete="off" />
+
+      <label>Phone Number(s)</label>
+      <input id="f-phone" type="tel" placeholder="+234 800 000 0000" />
+
+      <label>Evangeliser(s) *</label>
+      <input id="f-evangelisers" type="text" placeholder="Your name (comma-separate if multiple)" />
+
+      <label>Team</label>
+      <select id="f-team">
+        <option value="">— Select team —</option>
+      </select>
+
+      <label>Status *</label>
+      <select id="f-status">
+        <option value="Unsaved">Unsaved</option>
+        <option value="Saved">Saved</option>
+        <option value="Being discipled">Being discipled</option>
+        <option value="False Believer">False Believer</option>
+        <option value="Already a Believer">Already a Believer</option>
+      </select>
+
+      <div id="doac-row" style="display:none">
+        <label>Date of Accepting Christ</label>
+        <input id="f-doac" type="date" />
+      </div>
+
+      <label>Prayer Level</label>
+      <select id="f-prayer">
+        <option value="Low">Low</option>
+        <option value="Medium">Medium</option>
+        <option value="High">High</option>
+      </select>
+
+      <label>Follow-up Status</label>
+      <select id="f-followup">
+        <option value="New">New</option>
+        <option value="Contacted">Contacted</option>
+        <option value="Meeting scheduled">Meeting scheduled</option>
+        <option value="In discipleship">In discipleship</option>
+        <option value="Needs follow-up">Needs follow-up</option>
+        <option value="No response">No response</option>
+        <option value="Complete">Complete</option>
+      </select>
+
+      <label>Location / Area</label>
+      <input id="f-area" type="text" placeholder="e.g. Ikeja, Anthony Village" />
+
+      <label>Notes</label>
+      <textarea id="f-notes" placeholder="Any observations or prayer points…"></textarea>
+
+      <label class="past-visit-toggle">
+        <input type="checkbox" id="past-visit-cb" />
+        Logging a past visit?
+      </label>
+      <div id="past-date-row">
+        <label>Date of Evangelism</label>
+        <input id="f-date" type="date" />
+      </div>
+
+      <button class="btn btn-primary" id="submit-btn" onclick="submitVisit()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        Log Visit
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB: MAP ═══ -->
+<div id="tab-map" class="tab-panel">
+  <div class="topbar">Map <span>Visit Density</span></div>
+  <div style="position:relative">
+    <div class="map-controls" id="map-team-chips"></div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<!-- ═══ TAB: PEOPLE ═══ -->
+<div id="tab-people" class="tab-panel">
+  <div class="topbar">People <span>All visits</span></div>
+  <div class="page-content">
+    <div class="search-box">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="people-search" type="search" placeholder="Search by name or evangeliser…" oninput="filterPeople()" />
+    </div>
+    <div class="chips" id="status-chips">
+      <div class="chip active" data-status="" onclick="setStatusFilter(this, '')">All</div>
+      <div class="chip" data-status="Saved" onclick="setStatusFilter(this, 'Saved')">Saved</div>
+      <div class="chip" data-status="Unsaved" onclick="setStatusFilter(this, 'Unsaved')">Unsaved</div>
+      <div class="chip" data-status="Being discipled" onclick="setStatusFilter(this, 'Being discipled')">Discipled</div>
+      <div class="chip" data-status="Needs follow-up" onclick="setStatusFilter(this, 'Needs follow-up')">Needs follow-up</div>
+    </div>
+    <div id="people-list"></div>
+  </div>
+</div>
+
+<!-- ═══ TAB: STATS ═══ -->
+<div id="tab-stats" class="tab-panel">
+  <div class="topbar">Stats <span>Overview</span></div>
+  <div class="page-content">
+    <div class="stats-grid" id="stats-grid"></div>
+    <div class="card">
+      <div class="section-title">Breakdown</div>
+      <div id="stats-bars"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Recent Visits</div>
+      <div id="recent-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BOTTOM TAB BAR ═══ -->
+<nav class="tab-bar">
+  <button class="tab-btn active" id="nav-log" onclick="switchTab('log')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    Log
+  </button>
+  <button class="tab-btn" id="nav-map" onclick="switchTab('map')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    Map
+  </button>
+  <button class="tab-btn" id="nav-people" onclick="switchTab('people')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    People
+  </button>
+  <button class="tab-btn" id="nav-stats" onclick="switchTab('stats')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    Stats
+  </button>
+</nav>
+
+<!-- ═══ EDIT MODAL ═══ -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Edit Visit</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <input type="hidden" id="modal-record-id" />
+    <label>Status</label>
+    <select id="modal-status">
+      <option value="Unsaved">Unsaved</option>
+      <option value="Saved">Saved</option>
+      <option value="Being discipled">Being discipled</option>
+      <option value="False Believer">False Believer</option>
+      <option value="Already a Believer">Already a Believer</option>
+    </select>
+    <label>Follow-up Status</label>
+    <select id="modal-followup">
+      <option value="New">New</option>
+      <option value="Contacted">Contacted</option>
+      <option value="Meeting scheduled">Meeting scheduled</option>
+      <option value="In discipleship">In discipleship</option>
+      <option value="Needs follow-up">Needs follow-up</option>
+      <option value="No response">No response</option>
+      <option value="Complete">Complete</option>
+    </select>
+    <label>Prayer Level</label>
+    <select id="modal-prayer">
+      <option value="Low">Low</option>
+      <option value="Medium">Medium</option>
+      <option value="High">High</option>
+    </select>
+    <label>Notes</label>
+    <textarea id="modal-notes" placeholder="Update notes…"></textarea>
+    <button class="btn btn-primary" onclick="saveModalEdit()">Save Changes</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = '';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let gpsLat = null, gpsLng = null;
+let mapInstance = null, heatLayer = null, markersLayer = null;
+let allVisits = [];
+let activeStatusFilter = '';
+let activeTeamFilter = '';
+
+// ── Session persistence ───────────────────────────────────────────────────────
+function loadSession() {
+  try {
+    const s = JSON.parse(window.name || '{}');
+    if (s.evangelisers) document.getElementById('f-evangelisers').value = s.evangelisers;
+    if (s.team) document.getElementById('f-team').value = s.team;
+  } catch (_) {}
+}
+function saveSession() {
+  try {
+    window.name = JSON.stringify({
+      evangelisers: document.getElementById('f-evangelisers').value,
+      team: document.getElementById('f-team').value,
+    });
+  } catch (_) {}
+}
+document.getElementById('f-evangelisers').addEventListener('change', saveSession);
+document.getElementById('f-team').addEventListener('change', saveSession);
+
+// ── GPS ───────────────────────────────────────────────────────────────────────
+function initGPS() {
+  if (!navigator.geolocation) {
+    setGPSStatus('unavailable', 'GPS Unavailable');
+    return;
+  }
+  navigator.geolocation.watchPosition(
+    pos => {
+      gpsLat = pos.coords.latitude;
+      gpsLng = pos.coords.longitude;
+      setGPSStatus('ready', `GPS Ready (±${Math.round(pos.coords.accuracy)}m)`);
+    },
+    () => setGPSStatus('unavailable', 'GPS Unavailable'),
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+}
+function setGPSStatus(cls, text) {
+  const pill = document.getElementById('gps-pill');
+  pill.className = 'gps-pill ' + cls;
+  document.getElementById('gps-label').textContent = text;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+let mapInited = false, peopleInited = false, statsInited = false;
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+
+  if (name === 'map' && !mapInited) { initMap(); mapInited = true; }
+  if (name === 'map') loadMapData();
+  if (name === 'people') loadPeople();
+  if (name === 'stats') loadStats();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 3000);
+}
+
+// ── Status badge ──────────────────────────────────────────────────────────────
+function statusBadge(status) {
+  const map = {
+    'Saved': 'saved',
+    'Unsaved': 'unsaved',
+    'Being discipled': 'discipled',
+    'False Believer': 'false',
+  };
+  const cls = map[status] || 'default';
+  return `<span class="badge badge-${cls}">${status}</span>`;
+}
+
+// ── Form — Status → DOAC visibility ──────────────────────────────────────────
+document.getElementById('f-status').addEventListener('change', function() {
+  const row = document.getElementById('doac-row');
+  if (this.value === 'Saved') {
+    row.style.display = 'block';
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('f-doac').value = document.getElementById('f-date').value || today;
+  } else {
+    row.style.display = 'none';
+  }
+});
+
+document.getElementById('past-visit-cb').addEventListener('change', function() {
+  document.getElementById('past-date-row').style.display = this.checked ? 'block' : 'none';
+  if (!this.checked) document.getElementById('f-date').value = '';
+});
+
+// ── Load teams into select ────────────────────────────────────────────────────
+async function loadTeams() {
+  try {
+    const teams = await apiFetch('/api/teams');
+    const sel = document.getElementById('f-team');
+    teams.forEach(t => {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      sel.appendChild(o);
+    });
+    // restore session
+    loadSession();
+  } catch (_) {}
+}
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API_BASE + path, opts);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// ── Offline queue ─────────────────────────────────────────────────────────────
+function enqueueOffline(payload) {
+  const q = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+  q.push(payload);
+  localStorage.setItem('offlineQueue', JSON.stringify(q));
+}
+async function flushOfflineQueue() {
+  const q = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+  if (!q.length) return;
+  const remaining = [];
+  for (const item of q) {
+    try {
+      await apiFetch('/api/visits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+    } catch (_) {
+      remaining.push(item);
+    }
+  }
+  localStorage.setItem('offlineQueue', JSON.stringify(remaining));
+  if (remaining.length < q.length) showToast(`Synced ${q.length - remaining.length} offline visit(s)`, 'success');
+}
+
+// ── Submit visit ──────────────────────────────────────────────────────────────
+async function submitVisit() {
+  const name = document.getElementById('f-name').value.trim();
+  const evs = document.getElementById('f-evangelisers').value.trim();
+  if (!name) { showToast('Person name is required', 'error'); return; }
+  if (!evs) { showToast('Evangeliser name is required', 'error'); return; }
+
+  const pastCb = document.getElementById('past-visit-cb');
+  let dateStr = pastCb.checked ? document.getElementById('f-date').value : '';
+  // Convert YYYY-MM-DD to DD/MM/YYYY for the API
+  if (dateStr) {
+    const [y, m, d] = dateStr.split('-');
+    dateStr = `${d}/${m}/${y}`;
+  }
+
+  let doacStr = document.getElementById('f-doac').value;
+  if (doacStr) {
+    const [y, m, d] = doacStr.split('-');
+    doacStr = `${d}/${m}/${y}`;
+  }
+
+  const payload = {
+    person_name: name,
+    phone_numbers: document.getElementById('f-phone').value.trim() || null,
+    evangelisers: evs,
+    team_name: document.getElementById('f-team').value || null,
+    status: document.getElementById('f-status').value,
+    prayer_level: document.getElementById('f-prayer').value,
+    follow_up_status: document.getElementById('f-followup').value,
+    location_area: document.getElementById('f-area').value.trim() || null,
+    notes: document.getElementById('f-notes').value.trim() || null,
+    date_of_evangelism: dateStr || null,
+    date_of_accepting_christ: doacStr || null,
+    latitude: gpsLat !== null ? String(gpsLat) : null,
+    longitude: gpsLng !== null ? String(gpsLng) : null,
+  };
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    await apiFetch('/api/visits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    showToast('Visit logged!', 'success');
+    // Clear person-specific fields, keep evangeliser/team
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-phone').value = '';
+    document.getElementById('f-notes').value = '';
+    document.getElementById('f-area').value = '';
+    document.getElementById('f-status').value = 'Unsaved';
+    document.getElementById('doac-row').style.display = 'none';
+    document.getElementById('f-doac').value = '';
+    document.getElementById('past-visit-cb').checked = false;
+    document.getElementById('past-date-row').style.display = 'none';
+    document.getElementById('f-date').value = '';
+    saveSession();
+  } catch (err) {
+    if (!navigator.onLine) {
+      enqueueOffline(payload);
+      showToast('Saved offline — will sync when online', 'info');
+    } else {
+      showToast('Error: ' + err.message, 'error');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Log Visit`;
+  }
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+function initMap() {
+  mapInstance = L.map('map', { zoomControl: true }).setView([6.5244, 3.3792], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19,
+  }).addTo(mapInstance);
+  markersLayer = L.layerGroup().addTo(mapInstance);
+}
+
+async function loadMapData() {
+  if (!mapInstance) return;
+
+  // Load team chips
+  try {
+    const teams = await apiFetch('/api/teams');
+    const chipsEl = document.getElementById('map-team-chips');
+    chipsEl.innerHTML = `<div class="chip ${activeTeamFilter === '' ? 'active' : ''}" onclick="setTeamFilter(this,'')">All</div>`;
+    teams.forEach(t => {
+      chipsEl.innerHTML += `<div class="chip ${activeTeamFilter === t ? 'active' : ''}" onclick="setTeamFilter(this,'${t}')">${t}</div>`;
+    });
+  } catch (_) {}
+
+  // Heatmap
+  const heatUrl = '/api/heatmap' + (activeTeamFilter ? `?team=${encodeURIComponent(activeTeamFilter)}` : '');
+  try {
+    const points = await apiFetch(heatUrl);
+    if (heatLayer) mapInstance.removeLayer(heatLayer);
+    const latLngs = points.map(p => [p.latitude, p.longitude, p.intensity]);
+    heatLayer = L.heatLayer(latLngs, { radius: 25, blur: 15, maxZoom: 17 }).addTo(mapInstance);
+  } catch (_) {}
+
+  // Circle markers
+  markersLayer.clearLayers();
+  const visitUrl = '/api/visits?page_size=200' + (activeTeamFilter ? `&team=${encodeURIComponent(activeTeamFilter)}` : '');
+  try {
+    const visits = await apiFetch(visitUrl);
+    visits.forEach(v => {
+      if (!v.latitude || !v.longitude) return;
+      const lat = parseFloat(v.latitude), lng = parseFloat(v.longitude);
+      if (isNaN(lat) || isNaN(lng)) return;
+      const color = { 'Saved': '#16a34a', 'Unsaved': '#dc2626', 'Being discipled': '#2563eb' }[v.status] || '#64748b';
+      L.circleMarker([lat, lng], { radius: 6, color: color, fillColor: color, fillOpacity: 0.7 })
+        .bindPopup(`<b>${v.person_name}</b><br>${v.status}<br>${v.evangelisers}<br>${v.date_of_evangelism || ''}`)
+        .addTo(markersLayer);
+    });
+  } catch (_) {}
+}
+
+function setTeamFilter(el, team) {
+  activeTeamFilter = team;
+  document.querySelectorAll('#map-team-chips .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  loadMapData();
+}
+
+// ── People tab ────────────────────────────────────────────────────────────────
+async function loadPeople() {
+  try {
+    allVisits = await apiFetch('/api/visits?page_size=200');
+    renderPeople();
+  } catch (e) {
+    document.getElementById('people-list').innerHTML = `<div class="empty-state">Could not load visits</div>`;
+  }
+}
+
+function renderPeople() {
+  const query = document.getElementById('people-search').value.toLowerCase();
+  let filtered = allVisits.filter(v => {
+    const matchSearch = !query ||
+      v.person_name.toLowerCase().includes(query) ||
+      (v.evangelisers || '').toLowerCase().includes(query);
+    const matchStatus = !activeStatusFilter || v.status === activeStatusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const el = document.getElementById('people-list');
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-state">No visits found</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(v => {
+    const dateStr = v.date_of_evangelism ? new Date(v.date_of_evangelism).toLocaleDateString('en-GB') : '';
+    const phone = v.phone_numbers ? `<a class="phone-link" href="tel:${v.phone_numbers}">${v.phone_numbers}</a>` : '';
+    return `
+      <div class="person-card" onclick="openEditModal('${v.record_id}')">
+        <div class="person-card-row">
+          <div class="person-card-name">${escHtml(v.person_name)}</div>
+          ${statusBadge(v.status)}
+        </div>
+        <div class="person-card-meta" style="margin-top:4px">
+          ${escHtml(v.evangelisers || '')} · ${dateStr}
+        </div>
+        ${v.follow_up_status ? `<div class="person-card-meta">${escHtml(v.follow_up_status)}</div>` : ''}
+        ${phone ? `<div style="margin-top:4px">${phone}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function filterPeople() { renderPeople(); }
+
+function setStatusFilter(el, status) {
+  activeStatusFilter = status;
+  document.querySelectorAll('#status-chips .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderPeople();
+}
+
+// ── Stats tab ──────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const stats = await apiFetch('/api/stats');
+    const grid = document.getElementById('stats-grid');
+    grid.innerHTML = `
+      <div class="stat-card"><div class="stat-number">${stats.total_visits}</div><div class="stat-label">Total People</div></div>
+      <div class="stat-card"><div class="stat-number" style="color:var(--success)">${stats.total_saved}</div><div class="stat-label">Saved</div></div>
+      <div class="stat-card"><div class="stat-number" style="color:var(--info)">${stats.total_being_discipled}</div><div class="stat-label">Being Discipled</div></div>
+      <div class="stat-card"><div class="stat-number">${stats.total_evangelisers}</div><div class="stat-label">Evangelisers</div></div>
+    `;
+
+    const total = stats.total_visits || 1;
+    const bars = document.getElementById('stats-bars');
+    bars.innerHTML = [
+      { label: 'Saved', count: stats.total_saved, color: 'var(--success)' },
+      { label: 'Unsaved', count: stats.total_unsaved, color: 'var(--danger)' },
+      { label: 'Being Discipled', count: stats.total_being_discipled, color: 'var(--info)' },
+    ].map(b => `
+      <div class="bar-container">
+        <div class="bar-label"><span>${b.label}</span><span>${b.count}</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(b.count/total*100)}%;background:${b.color}"></div></div>
+      </div>`).join('');
+  } catch (_) {}
+
+  try {
+    const visits = await apiFetch('/api/visits?page_size=20');
+    const el = document.getElementById('recent-list');
+    el.innerHTML = visits.slice(0, 20).map(v => {
+      const dateStr = v.date_of_evangelism ? new Date(v.date_of_evangelism).toLocaleDateString('en-GB') : '';
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:0.88rem">${escHtml(v.person_name)}</div>
+            <div style="font-size:0.75rem;color:var(--muted)">${escHtml(v.evangelisers || '')} · ${dateStr}</div>
+          </div>
+          ${statusBadge(v.status)}
+        </div>`;
+    }).join('');
+  } catch (_) {}
+}
+
+// ── Edit modal ─────────────────────────────────────────────────────────────────
+function openEditModal(recordId) {
+  const visit = allVisits.find(v => v.record_id === recordId);
+  if (!visit) return;
+  document.getElementById('modal-record-id').value = recordId;
+  document.getElementById('modal-title').textContent = visit.person_name;
+  document.getElementById('modal-status').value = visit.status || 'Unsaved';
+  document.getElementById('modal-followup').value = visit.follow_up_status || 'New';
+  document.getElementById('modal-prayer').value = visit.prayer_level || 'Low';
+  document.getElementById('modal-notes').value = visit.notes || '';
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+}
+
+async function saveModalEdit() {
+  const recordId = document.getElementById('modal-record-id').value;
+  const payload = {
+    status: document.getElementById('modal-status').value,
+    follow_up_status: document.getElementById('modal-followup').value,
+    prayer_level: document.getElementById('modal-prayer').value,
+    notes: document.getElementById('modal-notes').value,
+  };
+  try {
+    const updated = await apiFetch(`/api/visits/${recordId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    // Update local cache
+    const idx = allVisits.findIndex(v => v.record_id === recordId);
+    if (idx !== -1) allVisits[idx] = updated;
+    renderPeople();
+    closeModal();
+    showToast('Updated!', 'success');
+  } catch (e) {
+    showToast('Update failed: ' + e.message, 'error');
+  }
+}
+
+// ── Escape HTML ───────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Close modal on overlay click
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initGPS();
+loadTeams();
+flushOfflineQueue();
+</script>
+</body>
+</html>

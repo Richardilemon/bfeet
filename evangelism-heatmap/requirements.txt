@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+geoalchemy2
+gspread
+google-auth
+pydantic
+python-dotenv
+psycopg2-binary
