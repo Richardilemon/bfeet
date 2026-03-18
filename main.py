@@ -13,8 +13,6 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from geoalchemy2 import Geometry
-from geoalchemy2.elements import WKTElement
 from pydantic import BaseModel, field_validator
 from sqlalchemy import (
     Boolean,
@@ -61,7 +59,6 @@ class Visit(Base):
     location_area = Column(String(255), nullable=True)
     latitude = Column(String(50), nullable=True)
     longitude = Column(String(50), nullable=True)
-    geom = Column(Geometry("POINT", srid=4326), nullable=True)
     follow_up_status = Column(String(50), default="New")
     team_name = Column(String(100), nullable=True)
     sheet_synced = Column(Boolean, default=False)
@@ -159,7 +156,6 @@ import sheets_sync as _sheets_sync
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
         await conn.run_sync(Base.metadata.create_all)
     # warm up sheets client (optional — will init lazily on first use)
     yield
@@ -221,12 +217,6 @@ async def create_visit(
 
     lat = body.latitude
     lng = body.longitude
-    geom = None
-    if lat and lng:
-        try:
-            geom = WKTElement(f"POINT({float(lng)} {float(lat)})", srid=4326)
-        except ValueError:
-            pass
 
     visit = Visit(
         record_id=record_id,
@@ -241,7 +231,6 @@ async def create_visit(
         location_area=body.location_area,
         latitude=lat,
         longitude=lng,
-        geom=geom,
         follow_up_status=body.follow_up_status or "New",
         team_name=body.team_name,
         sheet_synced=False,
