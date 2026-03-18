@@ -312,10 +312,20 @@
       <label>Evangeliser(s) *</label>
       <input id="f-evangelisers" type="text" placeholder="Your name (comma-separate if multiple)" />
 
-      <label>Team</label>
-      <select id="f-team">
-        <option value="">— Select team —</option>
+      <label>Day of Week</label>
+      <select id="f-outing-day">
+        <option value="">— Select day —</option>
+        <option>Monday</option>
+        <option>Tuesday</option>
+        <option>Wednesday</option>
+        <option>Thursday</option>
+        <option>Friday</option>
+        <option>Saturday</option>
+        <option>Sunday</option>
       </select>
+
+      <label>Outing Date</label>
+      <input id="f-outing-date" type="date" />
 
       <label>Status *</label>
       <select id="f-status">
@@ -489,19 +499,19 @@ function loadSession() {
   try {
     const s = JSON.parse(window.name || '{}');
     if (s.evangelisers) document.getElementById('f-evangelisers').value = s.evangelisers;
-    if (s.team) document.getElementById('f-team').value = s.team;
+    if (s.outing_day) document.getElementById('f-outing-day').value = s.outing_day;
   } catch (_) {}
 }
 function saveSession() {
   try {
     window.name = JSON.stringify({
       evangelisers: document.getElementById('f-evangelisers').value,
-      team: document.getElementById('f-team').value,
+      outing_day: document.getElementById('f-outing-day').value,
     });
   } catch (_) {}
 }
 document.getElementById('f-evangelisers').addEventListener('change', saveSession);
-document.getElementById('f-team').addEventListener('change', saveSession);
+document.getElementById('f-outing-day').addEventListener('change', saveSession);
 
 // ── GPS ───────────────────────────────────────────────────────────────────────
 function initGPS() {
@@ -579,19 +589,9 @@ document.getElementById('past-visit-cb').addEventListener('change', function() {
   if (!this.checked) document.getElementById('f-date').value = '';
 });
 
-// ── Load teams into select ────────────────────────────────────────────────────
-async function loadTeams() {
-  try {
-    const teams = await apiFetch('/api/teams');
-    const sel = document.getElementById('f-team');
-    teams.forEach(t => {
-      const o = document.createElement('option');
-      o.value = t; o.textContent = t;
-      sel.appendChild(o);
-    });
-    // restore session
-    loadSession();
-  } catch (_) {}
+// ── Load session on start ─────────────────────────────────────────────────────
+function loadTeams() {
+  loadSession();
 }
 
 // ── API helper ────────────────────────────────────────────────────────────────
@@ -651,7 +651,13 @@ async function submitVisit() {
     person_name: name,
     phone_numbers: document.getElementById('f-phone').value.trim() || null,
     evangelisers: evs,
-    team_name: document.getElementById('f-team').value || null,
+    outing_day: document.getElementById('f-outing-day').value || null,
+    outing_date: (() => {
+      const v = document.getElementById('f-outing-date').value;
+      if (!v) return null;
+      const [y, m, d] = v.split('-');
+      return `${d}/${m}/${y}`;
+    })(),
     status: document.getElementById('f-status').value,
     prayer_level: document.getElementById('f-prayer').value,
     follow_up_status: document.getElementById('f-followup').value,
@@ -709,18 +715,17 @@ function initMap() {
   markersLayer = L.layerGroup().addTo(mapInstance);
 }
 
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
 async function loadMapData() {
   if (!mapInstance) return;
 
-  // Load team chips
-  try {
-    const teams = await apiFetch('/api/teams');
-    const chipsEl = document.getElementById('map-team-chips');
-    chipsEl.innerHTML = `<div class="chip ${activeTeamFilter === '' ? 'active' : ''}" onclick="setTeamFilter(this,'')">All</div>`;
-    teams.forEach(t => {
-      chipsEl.innerHTML += `<div class="chip ${activeTeamFilter === t ? 'active' : ''}" onclick="setTeamFilter(this,'${t}')">${t}</div>`;
-    });
-  } catch (_) {}
+  // Day-of-week filter chips
+  const chipsEl = document.getElementById('map-team-chips');
+  chipsEl.innerHTML = `<div class="chip ${activeTeamFilter === '' ? 'active' : ''}" onclick="setTeamFilter(this,'')">All</div>`;
+  DAYS.forEach(d => {
+    chipsEl.innerHTML += `<div class="chip ${activeTeamFilter === d ? 'active' : ''}" onclick="setTeamFilter(this,'${d}')">${d}</div>`;
+  });
 
   // Heatmap
   const heatUrl = '/api/heatmap' + (activeTeamFilter ? `?team=${encodeURIComponent(activeTeamFilter)}` : '');
@@ -741,8 +746,9 @@ async function loadMapData() {
       const lat = parseFloat(v.latitude), lng = parseFloat(v.longitude);
       if (isNaN(lat) || isNaN(lng)) return;
       const color = { 'Saved': '#16a34a', 'Unsaved': '#dc2626', 'Being discipled': '#2563eb' }[v.status] || '#64748b';
+      const day = v.outing_day ? ` · ${v.outing_day}` : '';
       L.circleMarker([lat, lng], { radius: 6, color: color, fillColor: color, fillOpacity: 0.7 })
-        .bindPopup(`<b>${v.person_name}</b><br>${v.status}<br>${v.evangelisers}<br>${v.date_of_evangelism || ''}`)
+        .bindPopup(`<b>${v.person_name}</b><br>${v.status}<br>${v.evangelisers}<br>${v.date_of_evangelism || ''}${day}`)
         .addTo(markersLayer);
     });
   } catch (_) {}
