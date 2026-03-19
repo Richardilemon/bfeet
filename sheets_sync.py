@@ -26,15 +26,24 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-EXPECTED_HEADERS = {
-    10: "location_area",    # J
-    11: "latitude",         # K
-    12: "longitude",        # L
-    13: "follow_up_status", # M
-    14: "record_id",        # N
-    15: "outing_day",       # O
-    16: "outing_date",      # P
-}
+ALL_HEADERS = [
+    "person_name",           # A
+    "prayer_level",          # B
+    "evangelisers",          # C
+    "status",                # D
+    "date_of_evangelism",    # E
+    "date_of_accepting_christ", # F
+    "",                      # G (empty)
+    "notes",                 # H
+    "phone_numbers",         # I
+    "location_area",         # J
+    "latitude",              # K
+    "longitude",             # L
+    "follow_up_status",      # M
+    "record_id",             # N
+    "outing_day",            # O
+    "outing_date",           # P
+]
 
 _client: gspread.Client | None = None
 _sheet: gspread.Worksheet | None = None
@@ -64,27 +73,10 @@ def _get_sheet() -> gspread.Worksheet:
 
 
 def _ensure_headers(sheet: gspread.Worksheet) -> None:
-    """Ensure columns J–N have the expected headers in row 1."""
-    headers = sheet.row_values(1)
-    updates = []
-    for col_idx, header_name in EXPECTED_HEADERS.items():
-        # col_idx is 1-based
-        current = headers[col_idx - 1] if len(headers) >= col_idx else ""
-        if not current:
-            updates.append({
-                "range": gspread.utils.rowcol_to_a1(1, col_idx),
-                "values": [[header_name]],
-            })
-    if updates:
-        sheet.spreadsheet.values_batch_update(
-            {
-                "valueInputOption": "USER_ENTERED",
-                "data": [
-                    {"range": u["range"], "values": u["values"]}
-                    for u in updates
-                ],
-            }
-        )
+    """Write the full header row A–P if row 1 is empty."""
+    existing = sheet.row_values(1)
+    if not any(existing):
+        sheet.insert_row(ALL_HEADERS, index=1, value_input_option="USER_ENTERED")
 
 
 def _format_date(d) -> str:
