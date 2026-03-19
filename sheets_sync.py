@@ -70,10 +70,11 @@ def _get_sheet() -> gspread.Worksheet:
 
 
 def _ensure_headers(sheet: gspread.Worksheet) -> None:
-    """Write the full header row A–P if row 1 is empty."""
+    """Write the full header row A–N if row 1 is empty, then bold it."""
     existing = sheet.row_values(1)
     if not any(existing):
         sheet.insert_row(ALL_HEADERS, index=1, value_input_option="USER_ENTERED")
+        sheet.format("A1:N1", {"textFormat": {"bold": True}})
 
 
 def _format_date(d) -> str:

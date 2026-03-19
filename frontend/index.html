@@ -630,8 +630,13 @@ async function flushOfflineQueue() {
 async function submitVisit() {
   const name = document.getElementById('f-name').value.trim();
   const evs = document.getElementById('f-evangelisers').value.trim();
+  const phone = document.getElementById('f-phone').value.trim();
   if (!name) { showToast('Person name is required', 'error'); return; }
   if (!evs) { showToast('Evangeliser name is required', 'error'); return; }
+  if (phone && !/^[\d\s\+\-\(\)]+$/.test(phone)) {
+    showToast('Phone number can only contain digits, spaces, +, -, ()', 'error');
+    return;
+  }
 
   const pastCb = document.getElementById('past-visit-cb');
   let dateStr = pastCb.checked ? document.getElementById('f-date').value : '';
