@@ -3,11 +3,10 @@ Google Sheets sync for Beautiful Feet Evangelism Heatmap.
 
 Column mapping (1-indexed):
   A=person_name, B=prayer_level, C=evangelisers, D=status,
-  E=date_of_evangelism (DD/MM/YYYY), F=date_of_accepting_christ,
-  G=(empty), H=notes, I=phone_numbers,
-  J=location_area, K=latitude, L=longitude,
-  M=follow_up_status, N=record_id,
-  O=outing_day, P=outing_date (DD/MM/YYYY)
+  E=date_of_accepting_christ, F=notes, G=phone_numbers,
+  H=location_area, I=latitude, J=longitude,
+  K=follow_up_status, L=record_id,
+  M=outing_day, N=outing_date (DD/MM/YYYY)
 """
 
 import json
@@ -27,22 +26,20 @@ SCOPES = [
 ]
 
 ALL_HEADERS = [
-    "person_name",           # A
-    "prayer_level",          # B
-    "evangelisers",          # C
-    "status",                # D
-    "date_of_evangelism",    # E
-    "date_of_accepting_christ", # F
-    "",                      # G (empty)
-    "notes",                 # H
-    "phone_numbers",         # I
-    "location_area",         # J
-    "latitude",              # K
-    "longitude",             # L
-    "follow_up_status",      # M
-    "record_id",             # N
-    "outing_day",            # O
-    "outing_date",           # P
+    "person_name",              # A
+    "prayer_level",             # B
+    "evangelisers",             # C
+    "status",                   # D
+    "date_of_accepting_christ", # E
+    "notes",                    # F
+    "phone_numbers",            # G
+    "location_area",            # H
+    "latitude",                 # I
+    "longitude",                # J
+    "follow_up_status",         # K
+    "record_id",                # L
+    "outing_day",               # M
+    "outing_date",              # N
 ]
 
 _client: gspread.Client | None = None
@@ -107,9 +104,7 @@ def append_visit(data: dict) -> None:
         data.get("prayer_level", ""),
         data.get("evangelisers", ""),
         data.get("status", ""),
-        _format_date(data.get("date_of_evangelism")),
         _format_date(data.get("date_of_accepting_christ")),
-        "",  # G — empty
         data.get("notes", "") or "",
         data.get("phone_numbers", "") or "",
         data.get("location_area", "") or "",
@@ -120,13 +115,15 @@ def append_visit(data: dict) -> None:
         data.get("outing_day", "") or "",
         _format_date(data.get("outing_date")),
     ]
-    sheet.append_row(row, value_input_option="USER_ENTERED")
+    # Write directly to next empty row to avoid gspread table-detection issues
+    next_row = len(sheet.col_values(1)) + 1
+    sheet.update(f"A{next_row}", [row], value_input_option="USER_ENTERED")
 
 
 def update_row(record_id: str, updates: dict) -> None:
     """Find row where col N == record_id and update specified columns."""
     sheet = _get_sheet()
-    col_n_values = sheet.col_values(14)  # column N (1-indexed = 14)
+    col_n_values = sheet.col_values(12)  # column L (1-indexed = 12)
 
     row_idx = None
     for i, val in enumerate(col_n_values):
@@ -142,16 +139,15 @@ def update_row(record_id: str, updates: dict) -> None:
         "prayer_level": 2,
         "evangelisers": 3,
         "status": 4,
-        "date_of_evangelism": 5,
-        "date_of_accepting_christ": 6,
-        "notes": 8,
-        "phone_numbers": 9,
-        "location_area": 10,
-        "latitude": 11,
-        "longitude": 12,
-        "follow_up_status": 13,
-        "outing_day": 15,
-        "outing_date": 16,
+        "date_of_accepting_christ": 5,
+        "notes": 6,
+        "phone_numbers": 7,
+        "location_area": 8,
+        "latitude": 9,
+        "longitude": 10,
+        "follow_up_status": 11,
+        "outing_day": 13,
+        "outing_date": 14,
     }
 
     batch = []
