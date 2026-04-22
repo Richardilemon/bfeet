@@ -485,7 +485,8 @@
 </div>
 
 <script>
-const API_BASE = '';
+// Paste your GAS web app URL here after deploying (see gas/Code.gs)
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwUVj0orMjlxDmljMK9II_Te5GsXZ04raDe0tCunDfSrMyuotZRl_3jYzDfJ00818yOcA/exec';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let gpsLat = null, gpsLng = null;
@@ -594,9 +595,21 @@ function loadTeams() {
   loadSession();
 }
 
-// ── API helper ────────────────────────────────────────────────────────────────
-async function apiFetch(path, opts = {}) {
-  const res = await fetch(API_BASE + path, opts);
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function gasGet(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(GAS_URL + (qs ? '?' + qs : ''));
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// Content-Type: text/plain avoids the CORS preflight that GAS doesn't handle
+async function gasPost(body) {
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -613,11 +626,7 @@ async function flushOfflineQueue() {
   const remaining = [];
   for (const item of q) {
     try {
-      await apiFetch('/api/visits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item),
-      });
+      await gasPost(item);
     } catch (_) {
       remaining.push(item);
     }
@@ -679,11 +688,7 @@ async function submitVisit() {
   btn.textContent = 'Saving…';
 
   try {
-    await apiFetch('/api/visits', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    await gasPost(payload);
     showToast('Visit logged!', 'success');
     // Clear person-specific fields, keep evangeliser/team
     document.getElementById('f-name').value = '';
@@ -733,9 +738,10 @@ async function loadMapData() {
   });
 
   // Heatmap
-  const heatUrl = '/api/heatmap' + (activeTeamFilter ? `?team=${encodeURIComponent(activeTeamFilter)}` : '');
+  const heatParams = { action: 'heatmap' };
+  if (activeTeamFilter) heatParams.team = activeTeamFilter;
   try {
-    const points = await apiFetch(heatUrl);
+    const points = await gasGet(heatParams);
     if (heatLayer) mapInstance.removeLayer(heatLayer);
     const latLngs = points.map(p => [p.latitude, p.longitude, p.intensity]);
     heatLayer = L.heatLayer(latLngs, { radius: 25, blur: 15, maxZoom: 17 }).addTo(mapInstance);
@@ -743,9 +749,10 @@ async function loadMapData() {
 
   // Circle markers
   markersLayer.clearLayers();
-  const visitUrl = '/api/visits?page_size=200' + (activeTeamFilter ? `&team=${encodeURIComponent(activeTeamFilter)}` : '');
+  const visitParams = { action: 'list', page_size: 200 };
+  if (activeTeamFilter) visitParams.team = activeTeamFilter;
   try {
-    const visits = await apiFetch(visitUrl);
+    const visits = await gasGet(visitParams);
     visits.forEach(v => {
       if (!v.latitude || !v.longitude) return;
       const lat = parseFloat(v.latitude), lng = parseFloat(v.longitude);
@@ -769,7 +776,7 @@ function setTeamFilter(el, team) {
 // ── People tab ────────────────────────────────────────────────────────────────
 async function loadPeople() {
   try {
-    allVisits = await apiFetch('/api/visits?page_size=200');
+    allVisits = await gasGet({ action: 'list', page_size: 200 });
     renderPeople();
   } catch (e) {
     document.getElementById('people-list').innerHTML = `<div class="empty-state">Could not load visits</div>`;
@@ -822,7 +829,7 @@ function setStatusFilter(el, status) {
 // ── Stats tab ──────────────────────────────────────────────────────────────────
 async function loadStats() {
   try {
-    const stats = await apiFetch('/api/stats');
+    const stats = await gasGet({ action: 'stats' });
     const grid = document.getElementById('stats-grid');
     grid.innerHTML = `
       <div class="stat-card"><div class="stat-number">${stats.total_visits}</div><div class="stat-label">Total People</div></div>
@@ -845,7 +852,7 @@ async function loadStats() {
   } catch (_) {}
 
   try {
-    const visits = await apiFetch('/api/visits?page_size=20');
+    const visits = await gasGet({ action: 'list', page_size: 20 });
     const el = document.getElementById('recent-list');
     el.innerHTML = visits.slice(0, 20).map(v => {
       const dateStr = v.date_of_evangelism ? new Date(v.date_of_evangelism).toLocaleDateString('en-GB') : '';
@@ -887,11 +894,7 @@ async function saveModalEdit() {
     notes: document.getElementById('modal-notes').value,
   };
   try {
-    const updated = await apiFetch(`/api/visits/${recordId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const updated = await gasPost({ action: 'update', record_id: recordId, ...payload });
     // Update local cache
     const idx = allVisits.findIndex(v => v.record_id === recordId);
     if (idx !== -1) allVisits[idx] = updated;
