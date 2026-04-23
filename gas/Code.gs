@@ -1,13 +1,13 @@
 // ── Configuration ─────────────────────────────────────────────────────────────
-// Replace this with the ID from your Google Sheet's URL:
-// https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
-const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
+const SPREADSHEET_ID = '1YGFLHPizcd3MUrS7QRmK0sdkra04RXjY7dc66IRnjxs';
 const SHEET_NAME = 'Visits';
 
+// Internal keys — must match the column ORDER in the sheet (left to right).
+// The sheet header display names don't matter; only position matters.
 const HEADERS = [
   'record_id', 'person_name', 'prayer_level', 'evangelisers', 'status',
   'date_of_evangelism', 'date_of_accepting_christ', 'notes', 'phone_numbers',
-  'location_area', 'latitude', 'longitude', 'follow_up_status', 'team_name',
+  'location_area', 'latitude', 'longitude', 'follow_up_status',
   'outing_day', 'outing_date', 'created_at',
 ];
 
@@ -21,6 +21,13 @@ function getSheet() {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+// Map a raw sheet row (array) to an object using HEADERS positions
+function rowToObj(row) {
+  const obj = {};
+  HEADERS.forEach((h, i) => obj[h] = row[i]);
+  return obj;
 }
 
 // ── Entry points ───────────────────────────────────────────────────────────────
@@ -66,22 +73,19 @@ function handleCreate(body) {
 function handleUpdate(body) {
   const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const ridIdx = headers.indexOf('record_id');
+  const ridIdx = HEADERS.indexOf('record_id');
 
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][ridIdx]) !== String(body.record_id)) continue;
 
     Object.keys(body).forEach(key => {
       if (key === 'action' || key === 'record_id') return;
-      const colIdx = headers.indexOf(key);
+      const colIdx = HEADERS.indexOf(key);
       if (colIdx >= 0) sheet.getRange(i + 1, colIdx + 1).setValue(body[key] ?? '');
     });
 
-    const updated = sheet.getRange(i + 1, 1, 1, headers.length).getValues()[0];
-    const obj = {};
-    headers.forEach((h, j) => obj[h] = updated[j]);
-    return respond(obj);
+    const updated = sheet.getRange(i + 1, 1, 1, HEADERS.length).getValues()[0];
+    return respond(rowToObj(updated));
   }
 
   return respond({ error: 'Record not found' });
@@ -93,17 +97,12 @@ function handleList(e) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return respond([]);
 
-  const headers = data[0];
-  let rows = data.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h, i) => obj[h] = row[i]);
-    return obj;
-  });
+  let rows = data.slice(1).map(rowToObj);
 
   const p = e.parameter || {};
-  if (p.team)            rows = rows.filter(r => r.outing_day === p.team);
-  if (p.evangeliser)     rows = rows.filter(r => String(r.evangelisers).toLowerCase().includes(p.evangeliser.toLowerCase()));
-  if (p.status)          rows = rows.filter(r => r.status === p.status);
+  if (p.team)             rows = rows.filter(r => r.outing_day === p.team);
+  if (p.evangeliser)      rows = rows.filter(r => String(r.evangelisers).toLowerCase().includes(p.evangeliser.toLowerCase()));
+  if (p.status)           rows = rows.filter(r => r.status === p.status);
   if (p.follow_up_status) rows = rows.filter(r => r.follow_up_status === p.follow_up_status);
 
   rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -121,10 +120,9 @@ function handleHeatmap(e) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return respond([]);
 
-  const headers = data[0];
-  const latIdx = headers.indexOf('latitude');
-  const lngIdx = headers.indexOf('longitude');
-  const dayIdx = headers.indexOf('outing_day');
+  const latIdx = HEADERS.indexOf('latitude');
+  const lngIdx = HEADERS.indexOf('longitude');
+  const dayIdx = HEADERS.indexOf('outing_day');
   const team   = e.parameter && e.parameter.team;
 
   const counts = {};
@@ -153,20 +151,18 @@ function handleStats(e) {
                      total_being_discipled: 0, total_evangelisers: 0, total_teams: 0 });
   }
 
-  const headers  = data[0];
-  const rows     = data.slice(1);
-  const statusIdx = headers.indexOf('status');
-  const evsIdx    = headers.indexOf('evangelisers');
-  const teamIdx   = headers.indexOf('team_name');
+  const statusIdx = HEADERS.indexOf('status');
+  const evsIdx    = HEADERS.indexOf('evangelisers');
+  const dayIdx    = HEADERS.indexOf('outing_day');
 
   const evangelisers = new Set();
-  const teams = new Set();
+  const days = new Set();
   let saved = 0, unsaved = 0, discipled = 0;
 
-  rows.forEach(row => {
+  data.slice(1).forEach(row => {
     const status = row[statusIdx];
-    if (status === 'Saved')            saved++;
-    else if (status === 'Unsaved')     unsaved++;
+    if (status === 'Saved')                saved++;
+    else if (status === 'Unsaved')         unsaved++;
     else if (status === 'Being discipled') discipled++;
 
     String(row[evsIdx] || '').split(',').forEach(n => {
@@ -174,16 +170,16 @@ function handleStats(e) {
       if (t) evangelisers.add(t);
     });
 
-    if (row[teamIdx]) teams.add(row[teamIdx]);
+    if (row[dayIdx]) days.add(row[dayIdx]);
   });
 
   return respond({
-    total_visits: rows.length,
+    total_visits: data.length - 1,
     total_saved: saved,
     total_unsaved: unsaved,
     total_being_discipled: discipled,
     total_evangelisers: evangelisers.size,
-    total_teams: teams.size,
+    total_teams: days.size,
   });
 }
 
